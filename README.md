@@ -1,0 +1,1 @@
+# qr_code_scanner_python_parser
