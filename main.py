@@ -5,6 +5,7 @@ from bs4 import BeautifulSoup
 import locale
 from quixstreams import Application
 import json
+import logging
 
 class Result:
     def __init__(self, name, amount, cost_unit):
@@ -14,6 +15,13 @@ class Result:
 
     def __str__(self):
         return f'name: {self.name}, amount: {self.amount}, const_unit: {self.cost_unit}'
+
+    def to_dict(self):
+        return {
+            "name": self.name,
+            "amount": self.amount,
+            "cost_unit": self.cost_unit
+        }
 
 
 def parse(url: str) -> list[Result]:
@@ -41,18 +49,20 @@ def parse(url: str) -> list[Result]:
         res.append(Result(names[i], locale.atof(amounts[i]), locale.atof(costs_unit[i])))
     return res
 
-app = Application(
-    broker_address='localhost:9092',
-    loglevel='DEBUG',
-    consumer_group='links_reader',
-)
 
-with app.get_consumer() as consumer:
+def main():
+    app = Application(
+        broker_address='localhost:9092',
+        loglevel='DEBUG',
+        consumer_group='links_reader',
+    )
+    consumer = app.get_consumer()
+    producer = app.get_producer()
     consumer.subscribe(['links'])
     while True:
         msg = consumer.poll(1)
         if msg is None:
-            print('Waiting...')
+            continue
         elif msg.error() is not None:
             raise Exception(msg.error())
         else:
@@ -62,5 +72,19 @@ with app.get_consumer() as consumer:
             value = json.loads(msg.value())
             offset = msg.offset()
 
-            print(f'{offset} {key if key else "value"}:{value}'
-)
+            transactions = parse(value)
+            json_transactions = json.dumps([transaction.to_dict() for transaction in transactions]).encode('utf-8')
+            print(json_transactions)
+
+            logging.debug('Got transactions: %s', json_transactions)
+            producer.produce(
+                topic='transactions',
+                value=json_transactions,
+                partition=0
+            )
+            logging.info('Trnsactions produced')
+
+
+if __name__ == '__main__':
+    logging.basicConfig(level='DEBUG')
+    main()
