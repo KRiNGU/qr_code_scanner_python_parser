@@ -74,13 +74,13 @@ def main():
 
             transactions = parse(value)
             json_transactions = json.dumps([transaction.to_dict() for transaction in transactions]).encode('utf-8')
-            print(json_transactions)
 
             logging.debug('Got transactions: %s', json_transactions)
             producer.produce(
                 topic='transactions',
                 value=json_transactions,
-                partition=0
+                partition=0,
+                key=key
             )
             logging.info('Trnsactions produced')
 
